@@ -11,6 +11,8 @@ Usage:
 Ausgewertet werden alle Textebenen, auch in Gruppen, ausgeblendete Ebenen und
 Textebenen in eingebetteten Smartobjekten (rekursiv). Verknuepfte (externe)
 Smartobjekte koennen nicht gelesen werden und werden als Hinweis gemeldet.
+Schriften aus ausgeblendeten Ebenen (oder ausgeblendeten Gruppen/Smartobjekten)
+werden gekennzeichnet.
 Schriften, die nur in der Datei hinterlegt sind, aber von keinem Text verwendet
 werden, werden ignoriert. Die Dateien werden ausschliesslich gelesen.
 """
@@ -76,12 +78,16 @@ def fonts_in_layer(layer):
     return used
 
 
-def iter_type_layers(psd, prefix="", notes=None):
-    """Yield (layer_path, layer) for all type layers, descending into embedded smart objects."""
+def iter_type_layers(psd, prefix="", notes=None, parent_hidden=False):
+    """Yield (layer_path, layer, hidden) for all type layers, descending into embedded smart objects.
+
+    hidden is True if the layer itself, one of its groups or an enclosing smart object is hidden.
+    """
     for layer in psd.descendants():
         path = f"{prefix}{layer.name}"
+        hidden = parent_hidden or not layer.is_visible()
         if layer.kind == "type":
-            yield path, layer
+            yield path, layer, hidden
         elif layer.kind == "smartobject":
             try:
                 so = layer.smart_object
@@ -102,7 +108,8 @@ def iter_type_layers(psd, prefix="", notes=None):
                 if notes is not None:
                     notes.append(f"Smartobjekt nicht lesbar: [{path}]: {e}")
                 continue
-            yield from iter_type_layers(inner, prefix=f"{path} > ", notes=notes)
+            yield from iter_type_layers(inner, prefix=f"{path} > ", notes=notes,
+                                        parent_hidden=hidden)
 
 
 def iter_files(paths):
@@ -132,13 +139,13 @@ def main():
     ap.add_argument("--summary", action="store_true",
                     help="am Ende Gesamtuebersicht: Schrift -> Anzahl Dateien")
     ap.add_argument("--csv", action="store_true",
-                    help="CSV: datei;ebene;text;font;groesse_pt")
+                    help="CSV: datei;ebene;text;font;groesse_pt;sichtbar")
     args = ap.parse_args()
 
     usage = defaultdict(set)  # font -> {files}
     writer = csv.writer(sys.stdout, delimiter=";") if args.csv else None
     if writer:
-        writer.writerow(["datei", "ebene", "text", "font", "groesse_pt"])
+        writer.writerow(["datei", "ebene", "text", "font", "groesse_pt", "sichtbar"])
 
     for f in iter_files(args.paths):
         try:
@@ -149,16 +156,20 @@ def main():
 
         notes = []
         file_fonts = defaultdict(set)  # font -> {sizes}
+        visible_fonts = set()          # fonts used in at least one visible layer
+        hidden_fonts = set()           # fonts used in at least one hidden layer
         details = []
-        for path, layer in iter_type_layers(psd, notes=notes):
+        for path, layer, hidden in iter_type_layers(psd, notes=notes):
             text = (layer.text or "").replace("\r", " ").replace("\n", " ")[:60]
             for font, size in sorted(fonts_in_layer(layer), key=str):
                 file_fonts[font].add(size)
+                (hidden_fonts if hidden else visible_fonts).add(font)
                 usage[font].add(str(f))
                 if writer:
-                    writer.writerow([f, path, text, font, size])
+                    writer.writerow([f, path, text, font, size,
+                                     "nein" if hidden else "ja"])
                 else:
-                    details.append((font, size, path, text))
+                    details.append((font, size, path, text, hidden))
 
         if writer:
             for n in notes:
@@ -171,11 +182,19 @@ def main():
         for font in sorted(file_fonts):
             sizes = sorted(s for s in file_fonts[font] if s is not None)
             size_txt = ", ".join(f"{s:g}" for s in sizes)
-            print(f"   {font:<40} {size_txt + ' pt' if size_txt else ''}")
+            if font not in visible_fonts:
+                mark = "  [nur in ausgeblendeten Ebenen]"
+            elif font in hidden_fonts:
+                mark = "  [auch in ausgeblendeten Ebenen]"
+            else:
+                mark = ""
+            size_col = size_txt + " pt" if size_txt else ""
+            print(f"   {font:<40} {size_col:<14}{mark}".rstrip())
         if args.verbose and details:
             print("   -- Textebenen:")
-            for font, size, path, text in details:
-                print(f"      {font:<35} {str(size or ''):>6}  [{path}] {text}")
+            for font, size, path, text, hidden in details:
+                flag = "(ausgeblendet) " if hidden else ""
+                print(f"      {font:<35} {str(size or ''):>6}  {flag}[{path}] {text}")
         for n in notes:
             print(f"   ! {n}")
 

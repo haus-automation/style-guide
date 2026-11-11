@@ -47,7 +47,8 @@ Beispielausgabe:
 ```
 == kampagne/header.psd
    Montserrat-Bold                          24, 48 pt
-   Montserrat-Regular                       14 pt
+   Montserrat-Regular                       14 pt         [auch in ausgeblendeten Ebenen]
+   Helvetica                                18 pt         [nur in ausgeblendeten Ebenen]
    ! verknuepftes Smartobjekt nicht gelesen: [Logo] -> logo.psb
 
 == social/post.psd
@@ -56,7 +57,16 @@ Beispielausgabe:
 
 Für jede Datei siehst du die verwendeten Schriften und die vorkommenden Schriftgrößen.
 Angezeigt werden die PostScript-Namen der Schriften, also z. B. `Montserrat-Bold` statt
-„Montserrat Bold“. Zeilen mit `!` sind Hinweise, z. B. auf verknüpfte Smartobjekte. Deren
+„Montserrat Bold“.
+
+Schriften aus ausgeblendeten Ebenen werden gekennzeichnet:
+
+- `[nur in ausgeblendeten Ebenen]`: Die Schrift kommt nur in unsichtbarem Text vor.
+- `[auch in ausgeblendeten Ebenen]`: Die Schrift wird sichtbar verwendet, steckt aber
+  zusätzlich in ausgeblendeten Ebenen.
+
+Als ausgeblendet gilt eine Textebene auch, wenn ihre Gruppe oder das Smartobjekt, in dem
+sie liegt, ausgeblendet ist. Zeilen mit `!` sind Hinweise, z. B. auf verknüpfte Smartobjekte. Deren
 Inhalt liegt in einer externen Datei und kann daher nicht mit ausgewertet werden.
 
 ### Details je Textebene (`-v`)
@@ -66,7 +76,8 @@ docker run --rm -v "$PWD":/data:ro psd-fonts -v .
 ```
 
 Zusätzlich wird je Datei jede Textebene mit Schrift, Größe (pt) und den ersten 60 Zeichen
-des Texts aufgelistet. Ebenen in Smartobjekten erscheinen als `[Smartobjekt > Ebene]`.
+des Texts aufgelistet. Ausgeblendete Ebenen sind mit `(ausgeblendet)` markiert, Ebenen in
+Smartobjekten erscheinen als `[Smartobjekt > Ebene]`.
 
 ### Gesamtübersicht (`--summary`)
 
@@ -83,7 +94,8 @@ docker run --rm -v "$PWD":/data:ro psd-fonts --csv . > fonts.csv
 ```
 
 Die CSV-Datei verwendet `;` als Trennzeichen (passt für Excel und Numbers mit deutschen
-Einstellungen) und hat die Spalten `datei;ebene;text;font;groesse_pt`. Die Umleitung
+Einstellungen) und hat die Spalten `datei;ebene;text;font;groesse_pt;sichtbar`. Die Spalte `sichtbar` enthält
+`ja` oder `nein`. Die Umleitung
 `> fonts.csv` schreibt die Datei auf deinem Mac, nicht im Container. Die PSD-Ordner bleiben
 also weiterhin schreibgeschützt eingebunden.
 
